@@ -41,10 +41,25 @@ app.use(express.static('spa/static'));
 
 const PORT = 8080;
 
-app.post('/measurement', function (req, res) {
--       console.log("device id    : " + req.body.id + " key         : " + req.body.key + " temperature : " + req.body.t + " humidity    : " + req.body.h);	
-    const {insertedId} = insertMeasurement({id:req.body.id, t:req.body.t, h:req.body.h});
-	res.send("received measurement into " +  insertedId);
+app.post('/measurement', async function (req, res) {
+    const { id, key, t, h } = req.body;
+    var d = new Date(Date.now());
+    var localISOTime = new Date(d.getTime() - (d.getTimezoneOffset() * 60000)).toISOString().slice(0, -1);
+-   console.log("timestamp    : " + localISOTime  + " device id    : " + req.body.id + " key         : " + req.body.key + " temperature : " + req.body.t + " humidity    : " + req.body.h);	
+    const insertedId = await insertMeasurement({time:localISOTime,id:req.body.id,k:req.body.key ,t:req.body.t, h:req.body.h});
+    const currentDevices = await db.public.many("SELECT * FROM devices");
+    console.log(currentDevices)
+    const deviceExists = currentDevices.find(device => device.device_id === id);
+    if (deviceExists) {
+        console.log(`Device ${id} already exists.`);
+        console.log("El dispositivo ya existe")
+    } else {
+        db.public.none("INSERT INTO devices VALUES ('"+id+ "', '"+id+"', '"+key+"')");
+        console.log(`Device ${id} inserted.`);
+        console.log("El dispositivo no existe")
+    }
+
+	res.send(`received measurement into ${insertedId}`);
 });
 
 app.post('/device', function (req, res) {
@@ -110,6 +125,12 @@ app.get('/measurement', async (req,res) => {
 app.get('/device', function(req,res) {
     res.send( db.public.many("SELECT * FROM devices") );
 });
+
+// Endpoint de health check
+app.get('/health', (req, res) => {
+    res.status(200).send('OK');
+  });
+  
 
 startDatabase().then(async() => {
 
